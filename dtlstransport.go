@@ -16,6 +16,8 @@ import (
 
 	"github.com/pion/dtls/v2"
 	"github.com/pion/dtls/v2/pkg/crypto/fingerprint"
+	"github.com/pion/rtcp"
+	"github.com/pion/rtp"
 	"github.com/pion/srtp"
 	"github.com/pion/webrtc/v2/internal/mux"
 	"github.com/pion/webrtc/v2/internal/util"
@@ -205,7 +207,7 @@ func (t *DTLSTransport) startSRTP() error {
 	return nil
 }
 
-func (t *DTLSTransport) getSRTPSession() (*srtp.SessionSRTP, error) {
+func (t *DTLSTransport) RTPSession() (rtp.Session, error) {
 	t.lock.RLock()
 	if t.srtpSession != nil {
 		t.lock.RUnlock()
@@ -220,7 +222,7 @@ func (t *DTLSTransport) getSRTPSession() (*srtp.SessionSRTP, error) {
 	return t.srtpSession, nil
 }
 
-func (t *DTLSTransport) getSRTCPSession() (*srtp.SessionSRTCP, error) {
+func (t *DTLSTransport) RTCPSession() (rtcp.Session, error) {
 	t.lock.RLock()
 	if t.srtcpSession != nil {
 		t.lock.RUnlock()

@@ -44,7 +44,7 @@ func TestICETransport_OnSelectedCandidatePairChange(t *testing.T) {
 
 	senderCalledCandidateChange := int32(0)
 	for _, sender := range pcOffer.GetSenders() {
-		dtlsTransport := sender.Transport()
+		dtlsTransport := sender.Transport().(*DTLSTransport)
 		if dtlsTransport == nil {
 			continue
 		}

@@ -343,7 +343,7 @@ func TestPeerConnection_Media_Disconnected(t *testing.T) {
 		} else if iceState == ICEConnectionStateConnected {
 			// Assert that DTLS is done by pull remote certificate, don't tear down the PC early
 			for {
-				if len(vp8Sender.Transport().GetRemoteCertificate()) != 0 {
+				if len(vp8Sender.Transport().(*DTLSTransport).GetRemoteCertificate()) != 0 {
 					pcAnswer.sctpTransport.lock.RLock()
 					haveAssociation := pcAnswer.sctpTransport.association != nil
 					pcAnswer.sctpTransport.lock.RUnlock()

@@ -1061,13 +1061,13 @@ func (pc *PeerConnection) drainSRTP() {
 
 	go func() {
 		for {
-			srtpSession, err := pc.dtlsTransport.getSRTPSession()
+			rtpSession, err := pc.dtlsTransport.RTPSession()
 			if err != nil {
 				pc.log.Warnf("drainSRTP failed to open SrtpSession: %v", err)
 				return
 			}
 
-			_, ssrc, err := srtpSession.AcceptStream()
+			_, ssrc, err := rtpSession.AcceptStream()
 			if err != nil {
 				pc.log.Warnf("Failed to accept RTP %v", err)
 				return
@@ -1081,13 +1081,13 @@ func (pc *PeerConnection) drainSRTP() {
 
 	go func() {
 		for {
-			srtcpSession, err := pc.dtlsTransport.getSRTCPSession()
+			rtcpSession, err := pc.dtlsTransport.RTCPSession()
 			if err != nil {
 				pc.log.Warnf("drainSRTP failed to open SrtcpSession: %v", err)
 				return
 			}
 
-			_, ssrc, err := srtcpSession.AcceptStream()
+			_, ssrc, err := rtcpSession.AcceptStream()
 			if err != nil {
 				pc.log.Warnf("Failed to accept RTCP %v", err)
 				return
@@ -1425,12 +1425,12 @@ func (pc *PeerConnection) WriteRTCP(pkts []rtcp.Packet) error {
 		return err
 	}
 
-	srtcpSession, err := pc.dtlsTransport.getSRTCPSession()
+	rtcpSession, err := pc.dtlsTransport.RTCPSession()
 	if err != nil {
 		return nil
 	}
 
-	writeStream, err := srtcpSession.OpenWriteStream()
+	writeStream, err := rtcpSession.OpenWriteStream()
 	if err != nil {
 		return fmt.Errorf("WriteRTCP failed to open WriteStream: %v", err)
 	}

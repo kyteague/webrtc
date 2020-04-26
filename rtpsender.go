@@ -8,15 +8,14 @@ import (
 
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
-	"github.com/pion/srtp"
 )
 
 // RTPSender allows an application to control how a given Track is encoded and transmitted to a remote peer
 type RTPSender struct {
 	track          *Track
-	rtcpReadStream *srtp.ReadStreamSRTCP
+	rtcpReadStream rtcp.ReadStream
 
-	transport *DTLSTransport
+	transport Transport
 
 	// TODO(sgotti) remove this when in future we'll avoid replacing
 	// a transceiver sender since we can just check the
@@ -31,7 +30,7 @@ type RTPSender struct {
 }
 
 // NewRTPSender constructs a new RTPSender
-func (api *API) NewRTPSender(track *Track, transport *DTLSTransport) (*RTPSender, error) {
+func (api *API) NewRTPSender(track *Track, transport Transport) (*RTPSender, error) {
 	if track == nil {
 		return nil, fmt.Errorf("Track must not be nil")
 	} else if transport == nil {
@@ -68,7 +67,7 @@ func (r *RTPSender) setNegotiated() {
 
 // Transport returns the currently-configured *DTLSTransport or nil
 // if one has not yet been configured
-func (r *RTPSender) Transport() *DTLSTransport {
+func (r *RTPSender) Transport() Transport {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.transport
@@ -90,12 +89,12 @@ func (r *RTPSender) Send(parameters RTPSendParameters) error {
 		return fmt.Errorf("Send has already been called")
 	}
 
-	srtcpSession, err := r.transport.getSRTCPSession()
+	rtcpSession, err := r.transport.RTCPSession()
 	if err != nil {
 		return err
 	}
 
-	r.rtcpReadStream, err = srtcpSession.OpenReadStream(parameters.Encodings.SSRC)
+	r.rtcpReadStream, err = rtcpSession.OpenReadStream(parameters.Encodings.SSRC)
 	if err != nil {
 		return err
 	}
@@ -167,12 +166,12 @@ func (r *RTPSender) SendRTP(header *rtp.Header, payload []byte) (int, error) {
 	case <-r.stopCalled:
 		return 0, fmt.Errorf("RTPSender has been stopped")
 	case <-r.sendCalled:
-		srtpSession, err := r.transport.getSRTPSession()
+		rtpSession, err := r.transport.RTPSession()
 		if err != nil {
 			return 0, err
 		}
 
-		writeStream, err := srtpSession.OpenWriteStream()
+		writeStream, err := rtpSession.OpenWriteStream()
 		if err != nil {
 			return 0, err
 		}

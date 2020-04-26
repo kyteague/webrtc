@@ -7,28 +7,28 @@ import (
 	"sync"
 
 	"github.com/pion/rtcp"
-	"github.com/pion/srtp"
+	"github.com/pion/rtp"
 )
 
 // RTPReceiver allows an application to inspect the receipt of a Track
 type RTPReceiver struct {
 	kind      RTPCodecType
-	transport *DTLSTransport
+	transport Transport
 
 	track *Track
 
 	closed, received chan interface{}
 	mu               sync.RWMutex
 
-	rtpReadStream  *srtp.ReadStreamSRTP
-	rtcpReadStream *srtp.ReadStreamSRTCP
+	rtpReadStream  rtp.ReadStream
+	rtcpReadStream rtcp.ReadStream
 
 	// A reference to the associated api object
 	api *API
 }
 
 // NewRTPReceiver constructs a new RTPReceiver
-func (api *API) NewRTPReceiver(kind RTPCodecType, transport *DTLSTransport) (*RTPReceiver, error) {
+func (api *API) NewRTPReceiver(kind RTPCodecType, transport Transport) (*RTPReceiver, error) {
 	if transport == nil {
 		return nil, fmt.Errorf("DTLSTransport must not be nil")
 	}
@@ -44,7 +44,7 @@ func (api *API) NewRTPReceiver(kind RTPCodecType, transport *DTLSTransport) (*RT
 
 // Transport returns the currently-configured *DTLSTransport or nil
 // if one has not yet been configured
-func (r *RTPReceiver) Transport() *DTLSTransport {
+func (r *RTPReceiver) Transport() Transport {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.transport
@@ -74,22 +74,22 @@ func (r *RTPReceiver) Receive(parameters RTPReceiveParameters) error {
 		receiver: r,
 	}
 
-	srtpSession, err := r.transport.getSRTPSession()
+	rtpSession, err := r.transport.RTPSession()
 	if err != nil {
 		return err
 	}
 
-	r.rtpReadStream, err = srtpSession.OpenReadStream(parameters.Encodings.SSRC)
+	r.rtpReadStream, err = rtpSession.OpenReadStream(parameters.Encodings.SSRC)
 	if err != nil {
 		return err
 	}
 
-	srtcpSession, err := r.transport.getSRTCPSession()
+	rtcpSession, err := r.transport.RTCPSession()
 	if err != nil {
 		return err
 	}
 
-	r.rtcpReadStream, err = srtcpSession.OpenReadStream(parameters.Encodings.SSRC)
+	r.rtcpReadStream, err = rtcpSession.OpenReadStream(parameters.Encodings.SSRC)
 	if err != nil {
 		return err
 	}
