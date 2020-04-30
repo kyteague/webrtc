@@ -68,18 +68,18 @@ func (r *RTPReceiver) Receive(parameters RTPReceiveParameters) error {
 	}
 	defer close(r.received)
 
-	r.track = &Track{
-		kind:     r.kind,
-		ssrc:     parameters.Encodings.SSRC,
-		receiver: r,
-	}
-
 	rtpSession, err := r.transport.RTPSession()
 	if err != nil {
 		return err
 	}
 
-	r.rtpReadStream, err = rtpSession.OpenReadStream(parameters.Encodings.SSRC)
+	ssrc := parameters.Encodings.SSRC
+	if ssrc > 0 {
+		r.rtpReadStream, err = rtpSession.OpenReadStream(parameters.Encodings.SSRC)
+	} else {
+		r.rtpReadStream, ssrc, err = rtpSession.AcceptStream()
+	}
+
 	if err != nil {
 		return err
 	}
@@ -89,9 +89,15 @@ func (r *RTPReceiver) Receive(parameters RTPReceiveParameters) error {
 		return err
 	}
 
-	r.rtcpReadStream, err = rtcpSession.OpenReadStream(parameters.Encodings.SSRC)
+	r.rtcpReadStream, err = rtcpSession.OpenReadStream(ssrc)
 	if err != nil {
 		return err
+	}
+
+	r.track = &Track{
+		kind:     r.kind,
+		ssrc:     ssrc,
+		receiver: r,
 	}
 
 	return nil
