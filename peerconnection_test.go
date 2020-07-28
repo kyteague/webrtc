@@ -9,7 +9,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/pion/logging"
 	"github.com/pion/webrtc/v2/pkg/rtcerr"
 )
 
@@ -84,47 +83,6 @@ func signalPair(pcOffer *PeerConnection, pcAnswer *PeerConnection) error {
 	}
 }
 
-// For testing route all messages through one callback
-type testCatchAllLeveledLogger struct {
-	callback func(string)
-}
-
-func (t testCatchAllLeveledLogger) handleMsg(msg string) {
-	t.callback(msg)
-}
-func (t testCatchAllLeveledLogger) handleMsgf(format string, args ...interface{}) {
-	t.callback(fmt.Sprintf(format, args...))
-}
-
-func (t testCatchAllLeveledLogger) Trace(msg string) { t.handleMsg(msg) }
-func (t testCatchAllLeveledLogger) Tracef(format string, args ...interface{}) {
-	t.handleMsgf(format, args...)
-}
-func (t testCatchAllLeveledLogger) Debug(msg string) { t.handleMsg(msg) }
-func (t testCatchAllLeveledLogger) Debugf(format string, args ...interface{}) {
-	t.handleMsgf(format, args...)
-}
-func (t testCatchAllLeveledLogger) Info(msg string) { t.handleMsg(msg) }
-func (t testCatchAllLeveledLogger) Infof(format string, args ...interface{}) {
-	t.handleMsgf(format, args...)
-}
-func (t testCatchAllLeveledLogger) Warn(msg string) { t.handleMsg(msg) }
-func (t testCatchAllLeveledLogger) Warnf(format string, args ...interface{}) {
-	t.handleMsgf(format, args...)
-}
-func (t testCatchAllLeveledLogger) Error(msg string) { t.handleMsg(msg) }
-func (t testCatchAllLeveledLogger) Errorf(format string, args ...interface{}) {
-	t.handleMsgf(format, args...)
-}
-
-type testCatchAllLoggerFactory struct {
-	callback func(string)
-}
-
-func (t testCatchAllLoggerFactory) NewLogger(_ string) logging.LeveledLogger {
-	return testCatchAllLeveledLogger(t)
-}
-
 func TestNew(t *testing.T) {
 	pc, err := NewPeerConnection(Configuration{
 		ICEServers: []ICEServer{
@@ -143,6 +101,7 @@ func TestNew(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.NotNil(t, pc)
+	assert.NoError(t, pc.Close())
 }
 
 func TestPeerConnection_SetConfiguration(t *testing.T) {
@@ -266,6 +225,7 @@ func TestPeerConnection_SetConfiguration(t *testing.T) {
 		if got, want := err, test.wantErr; !reflect.DeepEqual(got, want) {
 			t.Errorf("SetConfiguration %q: err = %v, want %v", test.name, got, want)
 		}
+		assert.NoError(t, pc.Close())
 	}
 }
 
@@ -287,9 +247,10 @@ func TestPeerConnection_GetConfiguration(t *testing.T) {
 	assert.Equal(t, expected.BundlePolicy, actual.BundlePolicy)
 	assert.Equal(t, expected.RTCPMuxPolicy, actual.RTCPMuxPolicy)
 	// TODO(albrow): Uncomment this after #513 is fixed.
-	// See: https://github.com/pion/webrtc/v2/issues/513.
+	// See: https://github.com/pion/webrtc/issues/513.
 	// assert.Equal(t, len(expected.Certificates), len(actual.Certificates))
 	assert.Equal(t, expected.ICECandidatePoolSize, actual.ICECandidatePoolSize)
+	assert.NoError(t, pc.Close())
 }
 
 const minimalOffer = `v=0
@@ -314,9 +275,11 @@ a=sctpmap:5000 webrtc-datachannel 1024
 
 func TestSetRemoteDescription(t *testing.T) {
 	testCases := []struct {
-		desc SessionDescription
+		desc        SessionDescription
+		expectError bool
 	}{
-		{SessionDescription{Type: SDPTypeOffer, SDP: minimalOffer}},
+		{SessionDescription{Type: SDPTypeOffer, SDP: minimalOffer}, false},
+		{SessionDescription{Type: 0, SDP: ""}, true},
 	}
 
 	for i, testCase := range testCases {
@@ -324,10 +287,13 @@ func TestSetRemoteDescription(t *testing.T) {
 		if err != nil {
 			t.Errorf("Case %d: got error: %v", i, err)
 		}
-		err = peerConn.SetRemoteDescription(testCase.desc)
-		if err != nil {
-			t.Errorf("Case %d: got error: %v", i, err)
+
+		if testCase.expectError {
+			assert.Error(t, peerConn.SetRemoteDescription(testCase.desc))
+		} else {
+			assert.NoError(t, peerConn.SetRemoteDescription(testCase.desc))
 		}
+		assert.NoError(t, peerConn.Close())
 	}
 }
 
@@ -362,6 +328,9 @@ func TestCreateOfferAnswer(t *testing.T) {
 	if err != nil {
 		t.Errorf("SetRemoteDescription (Originator): got error: %v", err)
 	}
+
+	assert.NoError(t, answerPeerConn.Close())
+	assert.NoError(t, offerPeerConn.Close())
 }
 
 func TestPeerConnection_EventHandlers(t *testing.T) {
@@ -369,6 +338,11 @@ func TestPeerConnection_EventHandlers(t *testing.T) {
 	assert.NoError(t, err)
 	pcAnswer, err := NewPeerConnection(Configuration{})
 	assert.NoError(t, err)
+
+	defer func() {
+		assert.NoError(t, pcOffer.Close())
+		assert.NoError(t, pcAnswer.Close())
+	}()
 
 	// wasCalled is a list of event handlers that were called.
 	wasCalled := []string{}
@@ -486,6 +460,9 @@ func TestMultipleOfferAnswer(t *testing.T) {
 	if _, err = secondPeerConn.CreateOffer(nil); err != nil {
 		t.Errorf("Second Offer: got error: %v", err)
 	}
+
+	assert.NoError(t, nonTricklePeerConn.Close())
+	assert.NoError(t, secondPeerConn.Close())
 }
 
 func TestNoFingerprintInFirstMediaIfSetRemoteDescription(t *testing.T) {
@@ -527,4 +504,6 @@ a=end-of-candidates
 	if err != nil {
 		t.Error(err.Error())
 	}
+
+	assert.NoError(t, pc.Close())
 }

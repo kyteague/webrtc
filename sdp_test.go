@@ -64,10 +64,13 @@ func TestExtractFingerprint(t *testing.T) {
 }
 
 func TestExtractICEDetails(t *testing.T) {
+	const defaultUfrag = "defaultPwd"
+	const defaultPwd = "defaultUfrag"
+
 	t.Run("Missing ice-pwd", func(t *testing.T) {
 		s := &sdp.SessionDescription{
 			MediaDescriptions: []*sdp.MediaDescription{
-				{Attributes: []sdp.Attribute{{Key: "ice-ufrag", Value: "foobar"}}},
+				{Attributes: []sdp.Attribute{{Key: "ice-ufrag", Value: defaultUfrag}}},
 			},
 		}
 
@@ -78,12 +81,69 @@ func TestExtractICEDetails(t *testing.T) {
 	t.Run("Missing ice-ufrag", func(t *testing.T) {
 		s := &sdp.SessionDescription{
 			MediaDescriptions: []*sdp.MediaDescription{
-				{Attributes: []sdp.Attribute{{Key: "ice-pwd", Value: "foobar"}}},
+				{Attributes: []sdp.Attribute{{Key: "ice-pwd", Value: defaultPwd}}},
 			},
 		}
 
 		_, _, _, err := extractICEDetails(s)
 		assert.Equal(t, err, ErrSessionDescriptionMissingIceUfrag)
+	})
+
+	t.Run("ice details at session level", func(t *testing.T) {
+		s := &sdp.SessionDescription{
+			Attributes: []sdp.Attribute{
+				{Key: "ice-ufrag", Value: defaultUfrag},
+				{Key: "ice-pwd", Value: defaultPwd},
+			},
+			MediaDescriptions: []*sdp.MediaDescription{},
+		}
+
+		ufrag, pwd, _, err := extractICEDetails(s)
+		assert.Equal(t, ufrag, defaultUfrag)
+		assert.Equal(t, pwd, defaultPwd)
+		assert.NoError(t, err)
+	})
+
+	t.Run("ice details at media level", func(t *testing.T) {
+		s := &sdp.SessionDescription{
+			MediaDescriptions: []*sdp.MediaDescription{
+				{
+					Attributes: []sdp.Attribute{
+						{Key: "ice-ufrag", Value: defaultUfrag},
+						{Key: "ice-pwd", Value: defaultPwd},
+					},
+				},
+			},
+		}
+
+		ufrag, pwd, _, err := extractICEDetails(s)
+		assert.Equal(t, ufrag, defaultUfrag)
+		assert.Equal(t, pwd, defaultPwd)
+		assert.NoError(t, err)
+	})
+
+	t.Run("Conflict ufrag", func(t *testing.T) {
+		s := &sdp.SessionDescription{
+			Attributes: []sdp.Attribute{{Key: "ice-ufrag", Value: "invalidUfrag"}},
+			MediaDescriptions: []*sdp.MediaDescription{
+				{Attributes: []sdp.Attribute{{Key: "ice-ufrag", Value: defaultUfrag}, {Key: "ice-pwd", Value: defaultPwd}}},
+			},
+		}
+
+		_, _, _, err := extractICEDetails(s)
+		assert.Equal(t, err, ErrSessionDescriptionConflictingIceUfrag)
+	})
+
+	t.Run("Conflict pwd", func(t *testing.T) {
+		s := &sdp.SessionDescription{
+			Attributes: []sdp.Attribute{{Key: "ice-pwd", Value: "invalidPwd"}},
+			MediaDescriptions: []*sdp.MediaDescription{
+				{Attributes: []sdp.Attribute{{Key: "ice-ufrag", Value: defaultUfrag}, {Key: "ice-pwd", Value: defaultPwd}}},
+			},
+		}
+
+		_, _, _, err := extractICEDetails(s)
+		assert.Equal(t, err, ErrSessionDescriptionConflictingIcePwd)
 	})
 }
 
@@ -194,5 +254,39 @@ func TestTrackDetailsFromSDP(t *testing.T) {
 		}
 
 		assert.Equal(t, 0, len(trackDetailsFromSDP(nil, s)))
+	})
+}
+
+func TestHaveApplicationMediaSection(t *testing.T) {
+	t.Run("Audio only", func(t *testing.T) {
+		s := &sdp.SessionDescription{
+			MediaDescriptions: []*sdp.MediaDescription{
+				{
+					MediaName: sdp.MediaName{
+						Media: "audio",
+					},
+					Attributes: []sdp.Attribute{
+						{Key: "sendrecv"},
+						{Key: "ssrc", Value: "2000"},
+					},
+				},
+			},
+		}
+
+		assert.False(t, haveApplicationMediaSection(s))
+	})
+
+	t.Run("Application", func(t *testing.T) {
+		s := &sdp.SessionDescription{
+			MediaDescriptions: []*sdp.MediaDescription{
+				{
+					MediaName: sdp.MediaName{
+						Media: mediaSectionApplication,
+					},
+				},
+			},
+		}
+
+		assert.True(t, haveApplicationMediaSection(s))
 	})
 }
